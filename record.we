@@ -1,0 +1,362 @@
+<template>
+    <div class="wrapper" >
+        <dropdown class="dropdown" status-id="{{status}}">
+        	//总体统计
+            <div style="height: {{screenHeight}}" if="{{status == 0}}">
+                <div style="flex-direction: row; margin-top: 30">
+                    <div style = "width: 375;">
+                        <text class = "stat-all-title">
+                            Finished
+                        </text>
+                        <div style="flex-direction: row; padding-left:35; margin-top: 20">
+                            <text style = "font-size: 30">
+                            {{tot_cnt}}
+                            </text>
+                            <text style = "color : #008000; font-size: 30; padding-left:10">
+                             +{{today_cnt}}
+                            </text>
+                        </div>
+                    </div>
+                    <div style = "width : 375;">
+                        <text class = "stat-all-title">
+                            Daily Average
+                        </text>
+                    
+                        <div style="flex-direction: row;  padding-left: 35; margin-top: 20">
+                            <text style = "font-size: 30">
+                                {{daily_avg}}
+                            </text>
+                            <text style = "color : #008000; font-size: 30; padding-left:10" if="{{daily_avg_inc>=0}}">
+                                +{{daily_avg_inc}}
+                            </text>
+                            //这个值可能为负数，就不显示加号了
+                            <text style = "color : #008000; font-size: 30; padding-left:10" if="{{daily_avg_inc<0}}">
+                                {{daily_avg_inc}}
+                            </text>
+                        </div>
+                    </div>
+                </div>
+                
+                <div style="flex-direction: row; margin-top: 40; background-color:#fff;">  
+                    <div style="width:375; padding-right: 20">
+                        <div style="height: 125;">
+                            <text class="workday-title-1">BEST WORKDAY</text>
+                        </div>
+                        <div style="height: 125;">
+                            <text class="workday-title-2">{{best_week_day}}</text>
+                        </div>
+                        <div style="width: 350; height: 125;">
+                            <text class="workday-title-3">{{best_week_day_cnt}}</text>
+                        </div>
+                        <div style="width: 350; height: 125;">
+                            <text class="workday-title-4">AVG + {{best_week_day_inc}}</text>
+                        </div>          
+                    </div>
+                  
+                    <div style="align-items:center; height: {{bar_max_height}}; background-color:#F7F7F7; margin-right: 22;">
+                        <div style="width: 30;height:{{s_height}};background-color:#fff;">
+                        </div>
+                        <text class="bar-text">S</text>
+                    </div> 
+                  
+                    <div style="align-items:center; height: {{bar_max_height}}; background-color:#F7F7F7; margin-right: 22;">       
+                        <div style="width: 30;height:{{m_height}};background-color:#fff;">
+                        </div>
+                        <text class="bar-text">M</text>
+                    </div> 
+                          
+                    <div style="align-items:center; height: {{bar_max_height}}; background-color:#F7F7F7; margin-right: 22;">    
+                        <div style="width: 30;height:{{t_height}};background-color:#fff;">
+                        </div>
+                        <text class="bar-text">T</text>
+                    </div>
+
+                    <div style="align-items:center; height: {{bar_max_height}}; background-color:#F7F7F7; margin-right: 22;">       
+                        <div style="width: 30;height:{{w_height}};background-color:#fff;">
+                        </div>
+                        <text class="bar-text">W</text>
+                    </div>
+                      
+                    <div style="align-items:center; height: {{bar_max_height}}; background-color:#F7F7F7; margin-right: 22;">        
+                        <div style="width: 30;height:{{thu_height}};background-color:#fff;">
+                        </div>
+                        <text class="bar-text">T</text>
+                    </div>
+                      
+                    <div style="align-items:center; height: {{bar_max_height}}; background-color:#F7F7F7; margin-right: 22;">    
+                        <div style="width: 30;height:{{f_height}};background-color:#fff;">
+                        </div>
+                        <text class="bar-text">F</text>
+                    </div>
+                      
+                    <div style="align-items:center; height: {{bar_max_height}}; background-color:#F7F7F7; margin-right: 22;">        
+                        <div style="width: 30;height:{{sat_height}};background-color:#fff;">
+                        </div>
+                        <text class="bar-text">S</text>
+                    </div>
+                </div>
+            </div>
+            //番茄钟记录
+            <div style="height: {{screenHeight}}" if="{{status == 1}}">
+                <list>
+                    <cell repeat="{{pomo_record}}" class="cell" onlongpress="del_pomorec" index="{{$index}}">
+                        <text class="title">{{title}}</text>
+                        <div class="info">
+                        	//不同类型的记录用不同颜色
+                            <text class="txt pomodoro" if="{{stat == 'pomodoro'}}">Pomodoro,</text>
+                            <text class="txt rest" if="{{stat == 'rest'}}">Rest,</text>
+                            <text class="txt">time: {{start}}-{{end}},</text>
+                            <text class="txt">date: {{date}}</text>
+                        </div>
+                    </cell>
+                </list>
+			</div>
+			//任务记录
+            <div style="height: {{screenHeight}}" if="{{status == 2}}">
+                <list>
+                    <cell repeat="{{task_record}}" class="cell" onlongpress="del_taskrec" index="{{$index}}">
+                        <text class="title">{{title}}</text>
+                        <div class="info">
+                        	//不同类型的记录用不同颜色
+                            <text class="txt pomodoro" if="{{stat == 'add' || stat == 'finished'}}">{{stat}},</text>
+                            <text class="txt rest" if="{{stat == 'del' || stat == 'recall'}}">{{stat}},</text>
+                            <text class="txt pomodoro" if="{{stat == 'add' || stat == 'finished'}}">pomo: {{pomo_cnt}},</text>
+                            <text class="txt rest" if="{{stat == 'del' || stat == 'recall'}}">pomo: {{pomo_cnt}},</text>
+                            <text class="txt">time: {{time}},</text>
+                            <text class="txt">date: {{date}}</text>
+                        </div>
+                    </cell>
+                </list>
+			</div>
+        </dropdown>
+    </div>
+
+</template>
+
+<style>
+.wrapper { 
+	width: 750; 
+	position: absolute; 
+	top: 100; 
+	left: 0; 
+	right: 0; 
+	bottom: 100;
+}
+.dropdown{
+    justify-content: center;
+    align-content: stretch;
+    position: relative;
+    z-index: 100;
+}
+.cell {
+    width: 750;
+    padding-top: 15;
+    padding-bottom: 5;
+    padding-left:20;
+    padding-right:20;
+    border-bottom-width: 1;
+    border-style: solid;
+    border-color: #999;
+}
+.title{
+    font-size:32;
+    padding-top:5 ;
+    padding-bottom: 5;
+    color:#333;
+}
+.info {
+    flex-direction: row;
+    justify-content: flex-start;
+    align-items:stretch;
+}
+.txt {
+    font-size:28;
+     padding-top:5;
+     padding-bottom:5;
+     color: #999;
+     margin-right: 10;
+ }
+ .pomodoro { color: #e74c3c; }
+ .rest { color: #458b00; }
+
+.stat-all-title{
+    font-size:40;
+    padding-left:35;
+}
+
+.workday-title-1 {
+    font-size:45;
+    //text-align:center;
+    font-weight:bold;
+    padding-top: 55;
+    margin-left: 20;
+    color: #C0C0C0;
+}
+.workday-title-2 {
+    font-size:60;
+    //text-align:center;
+    padding-top:30;
+    font-weight:bold;
+    color:#000000;
+    margin-left: 20;
+}
+.workday-title-3 {
+    font-size:45;
+    //text-align:center;
+    font-weight:bold;
+    padding-top:25;
+    color:#000000;
+    margin-left: 20;
+}
+.workday-title-4 {
+    font-size:30;
+    //text-align:center;
+    font-weight:bold;
+    color:#C0C0C0;
+    padding-top:25;
+    margin-left: 20;
+}
+.bar-text{
+    color: #9F79EE;
+    font-size: 15;
+}
+</style>
+
+<script>
+    require('./dropdown.we');
+
+    module.exports = {
+        data: {
+            screenHeight: 0,
+            status: 0,
+            pomo_record: [],
+            task_record: [],
+
+            bar_max_height: 50*10,
+            s_height: 0,
+            m_height: 0,
+            t_height: 0,
+            w_height: 0,
+            thu_height: 0,
+            f_height: 0,
+            sat_height: 0,
+
+            daily_avg: 0.00,
+            daily_avg_inc: 0.00,
+
+            best_week_day: 'No Data',
+            best_week_day_cnt: 0,
+            best_week_day_inc: 0,
+
+            week_cnt: [0, 0, 0, 0, 0, 0, 0], //最近一周的番茄钟个数
+            tot_cnt: 0, //番茄钟总数，包括今天
+            today_cnt: 0, //今天番茄钟总数
+            day_num: 0, //总天数，新的一天时自加1
+        },
+        ready: function () {
+			var storage = require('@weex-module/storage');
+			var self = this;
+
+			//获取屏幕高度，以显示列表
+            //this.screenHeight = this.$getConfig().env.deviceHeight;
+            this.screenHeight = 792;
+            //监听下拉栏状态改变
+            this.$on('statuschange', function (e) {
+                this.status = e.detail.id; //设置下拉栏状态
+                //this.$call('modal', 'toast', {'message': this.status, 'duration': 2});
+            }.bind(this));
+
+			var storage = require('@weex-module/storage');
+			var self = this;
+
+			//读取番茄钟记录
+			storage.getItem('pomo_record',function(e) {
+				//self.$call('modal', 'toast', {'message': JSON.parse(e.data), 'duration': 2});
+				self.pomo_record = JSON.parse(e.data);
+			});
+			//读取任务记录
+            storage.getItem('task_record',function(e) {
+                //self.$call('modal', 'toast', {'message': JSON.parse(e.data), 'duration': 2});
+                self.task_record = JSON.parse(e.data);
+            });
+
+			//读取统计值并绘图
+            storage.getItem('week_cnt',function(e) {
+                self.week_cnt = JSON.parse(e.data);
+                //self.$call('modal', 'toast', {'message': self.week_cnt, 'duration': 2});
+
+	            self.s_height = self.week_cnt[0] + 1;
+	            self.m_height = self.week_cnt[1] + 1;
+	            self.t_height = self.week_cnt[2] + 1;
+	            self.w_height = self.week_cnt[3] + 1;
+	            self.thu_height = self.week_cnt[4] + 1;
+	            self.f_height = self.week_cnt[5] + 1;
+	            self.sat_height = self.week_cnt[6] + 1;
+
+	            self.s_height = self.bar_max_height - self.s_height * 50;
+	            self.m_height = self.bar_max_height - self.m_height * 50;
+	            self.t_height = self.bar_max_height - self.t_height * 50;
+	            self.w_height = self.bar_max_height - self.w_height * 50;
+	            self.thu_height = self.bar_max_height - self.thu_height * 50;
+	            self.f_height = self.bar_max_height - self.f_height * 50;
+	            self.sat_height = self.bar_max_height - self.sat_height * 50; 
+
+	            var week_name = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+	            var max_cnt = 0;
+	            var week_tot = 0;
+	            for(var i = 0; i < self.week_cnt.length; i++) {
+	            	week_tot = week_tot + self.week_cnt[i];
+					if(self.week_cnt[i] > max_cnt) {//若有相同的取第一个
+						max_cnt = self.week_cnt[i];
+						self.best_week_day = week_name[i];
+						self.best_week_day_cnt = self.week_cnt[i];
+					}
+					if(max_cnt > 0) self.best_week_day_inc = (max_cnt - week_tot*1.0/7).toFixed(2);
+				}
+            });
+            storage.getItem('tot_cnt',function(e) {
+                self.tot_cnt = parseInt(e.data);
+                //self.$call('modal', 'toast', {'message': self.tot_cnt, 'duration': 2});
+	            storage.getItem('day_num',function(e) {
+	                self.day_num = parseInt(e.data);
+	                //self.$call('modal', 'toast', {'message': self.day_num, 'duration': 2});
+	                self.daily_avg = (self.tot_cnt*1.0/self.day_num).toFixed(2);
+
+		            storage.getItem('today_cnt',function(e) {
+		                self.today_cnt = parseInt(e.data);
+
+		                //self.$call('modal', 'toast', {'message': self.today_cnt, 'duration': 2});
+		                if(self.day_num == 1) self.daily_avg_inc = (self.tot_cnt*1.0/self.day_num).toFixed(2);
+		                else self.daily_avg_inc = ((self.tot_cnt*1.0/self.day_num)-((self.tot_cnt-self.today_cnt)*1.0/(self.day_num-1))).toFixed(2);
+		            });
+	            });
+            });
+        },
+        methods: {
+	        //删除番茄钟记录
+			del_pomorec: function(e) {
+				var storage = require('@weex-module/storage');
+				var self = this;
+
+				//self.$call('modal', 'toast', {'message': e.target.attr.index, 'duration': 2});
+				var index = e.target.attr.index;
+				var t = self.pomo_record[index];
+				self.pomo_record.splice(index, 1);
+
+				storage.setItem('pomo_record', JSON.stringify(self.pomo_record));
+			},
+	        //删除任务记录
+			del_taskrec: function(e) {
+				var storage = require('@weex-module/storage');
+				var self = this;
+
+				//self.$call('modal', 'toast', {'message': e.target.attr.index, 'duration': 2});
+				var index = e.target.attr.index;
+				var t = self.task_record[index];
+				self.task_record.splice(index, 1);
+
+				storage.setItem('task_record', JSON.stringify(self.task_record));
+			},
+        }
+    }
+</script>

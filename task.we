@@ -1,0 +1,249 @@
+<template>
+	<scroller class="wrapper">
+		<div class="task-add" style="flex-direction: row;">
+			<input class="task-add-name" style="flex:1;" id="task-add-name" type="text" oninput="change" value="{{task_add_input}}" placeholder="Add a new task" />
+			//添加输入框中有内容时，才显示提交按钮
+			<image class="task-add-submit" src="http://p1.bqimg.com/567571/35ea328fd8adde9b.png" if="{{can_submit}}" onclick="submit">
+		</div>
+		<list class="task-list">
+			<cell repeat="{{task}}">
+				//单击标记任务完成，长按删除任务
+				<div class="task-item" onclick="mark" onlongpress="delete" index="{{$index}}" style="flex-direction: row;">
+					<image class="task-item-finished" src="http://p1.bpimg.com/567571/2daccb57f5eaf3af.png" if="{{!is_finished}}">
+					</image>
+					<image class="task-item-finished" src="http://i1.piimg.com/567571/00bedf12dedceca3.png" if="{{is_finished}}">
+					</image>
+					<text class="task-item-name" if="{{!is_finished}}">{{name}}</text>
+					//已完成的用灰色和删除线
+					<text class="task-item-name" style="text-decoration: line-through; color: #e0e0e0" if="{{is_finished}}">{{name}}</text>
+				</div>
+			</cell>
+		</list>
+	</scroller>
+</template>
+
+<style>
+.wrapper { 
+	width: 750; 
+	position: absolute; 
+	top: 100; 
+	left: 0; 
+	right: 0; 
+	bottom: 100;
+}
+.task-add {
+	background-color: #fff;
+	margin-top: 16;
+	margin-bottom: 18;
+	border-top-style: solid;
+	border-bottom-style: solid;
+	border-top-width: 2;
+	border-bottom-width: 2;
+	border-color: #ddd;
+	padding-left: 60;
+	padding-right: 60;
+	height: 120;
+}
+.task-add-name {
+	font-size: 35;
+}
+.task-add-submit {
+	margin-top: 35;
+	width: 50; 
+	height: 50;
+}
+.task-list {
+	margin-bottom: 0;
+}
+.task-item {
+	flex-direction: row;
+	background-color: #fff;
+	margin-top: -2;
+	padding-top: 32;
+	padding-left: 60;
+	border-top-style: solid;
+	border-bottom-style: solid;
+	border-top-width: 2;
+	border-bottom-width: 2;
+	border-color: #ddd;
+	height: 120;
+}
+.task-item-finished {
+	width: 56; 
+	height: 56; 
+}
+.task-item-name {
+	font-size: 38;
+	margin-left: 20;
+	color: #777;
+}
+</style>
+
+<script>
+require('weex-components');
+module.exports = {
+	data: {
+		timer_is_run: false,
+		can_submit: false,
+		task_add_input: "",
+		task:[],
+	    task_record: [],
+	},
+	created: function() {
+		var self = this;
+		self.timer_is_run = false;
+		
+		//监听主控件广播的有关运行标记的状态改变，task页面不关心休息状态，所以不监听
+		this.$on('timer_stat', function(e) {
+			//self.$call('modal', 'toast', {'message': e.detail.stat, 'duration': 2});
+			if(e.detail.stat == 'TRUE') self.timer_is_run = true;
+			else self.timer_is_run = false;
+		});
+	},
+	ready: function() {
+		var storage = require('@weex-module/storage');
+		var self = this;
+
+		//读取任务
+		storage.getItem('task',function(e){
+			//self.$call('modal', 'toast', {'message': JSON.parse(e.data), 'duration': 2});
+			self.task = JSON.parse(e.data);
+		});
+		//读取运行标记，每次子控件被载入的时候都会读取
+		storage.getItem('timer_stat',function(e){
+			if(e.data == 'TRUE') self.timer_is_run = true;
+			else self.timer_is_run = false;
+		});
+	},
+	methods: {
+		//深度复制
+		clone: function(obj) {
+			return {name: obj.name, is_selected: obj.is_selected, is_run: obj.is_run, is_finished: obj.is_finished, pomo_cnt: obj.pomo_cnt};
+		},
+		//排序，将已完成的排序到列表后
+		sortby: function(a, b)
+		{
+			if(!a.is_finished && b.is_finished) return -1;
+			else if(a.is_finished && !b.is_finished) return 1;
+			else return 0;
+		},
+		//添加task操作记录，传入task和对task的操作
+		record: function(t, st) {
+			var storage = require('@weex-module/storage');
+    		var self = this;
+
+			storage.getItem('task_record',function(e) {
+		        self.task_record = JSON.parse(e.data);
+
+		        var d = new Date();
+		        var rec = {title: t.name, stat: st, pomo_cnt: t.pomo_cnt,
+		        	time: d.getHours() + ':' + d.getMinutes(),
+		        	date: d.getFullYear() + '/' + (d.getMonth()+1) + '/' + d.getDate()
+		        	};
+		        //self.$call('modal', 'toast', {'message': rec, 'duration': 5});
+		        //添加一条新的任务记录
+		        self.task_record.push(rec);
+		        //self.$call('modal', 'toast', {'message': task_record.length, 'duration': 2});
+		        //仅做写入，不想做广播通知了，如果计时完成时正在看任务记录的子控件，该子控件不会立刻刷新，必须再次载入该子控件时才会
+		        storage.setItem('task_record', JSON.stringify(self.task_record));
+	    	});
+		},
+		//标记任务完成或撤销完成
+		mark: function(e) {
+			var storage = require('@weex-module/storage');
+			var self = this;
+
+			//计时器进行时不能对任务进行标记
+			if(this.timer_is_run) {
+				this.$call('modal', 'toast', {'message': 'Task editing is disabled because you are currently in a pomo', 'duration': 2});
+				return;
+			}
+
+			var index = e.target.attr.index;
+			this.task[index].is_finished = !this.task[index].is_finished; //标记或撤销
+			this.task[index].is_selected = false; 
+			
+			var tmp = this.task.slice(); 
+			tmp.sort(this.sortby); //排序
+			this.task.splice(0, this.task.length);
+			for(var i = 0; i < tmp.length; i++) {
+				var t = this.clone(tmp[i]);
+				this.task.push(t);
+			}
+			storage.setItem('task', JSON.stringify(self.task));
+
+			var t = this.task[index];
+			//添加记录
+			if(t.is_finished) this.record(t, 'finished');
+			else this.record(t, 'recall');
+		},
+		//监听输入框改变，当有内容时显示添加按钮
+		change: function(e) {
+			if(e.value.length != 0) { //有内容
+				this.can_submit = true;
+			} else {
+				this.can_submit = false;
+			}
+			this.task_add_input = e.value;
+		},
+		//添加，提交新的任务
+		submit: function(e) {
+			if(this.task_add_input.length > 0){
+				var storage = require('@weex-module/storage');
+				var self = this;
+
+				var t = {name: this.task_add_input, is_selected: false, is_run: false, is_finished: false, pomo_cnt: 0};
+				this.task.push(t);
+				this.task_add_input = ""; //输入框清空
+				
+				var tmp = this.task.slice(); 
+				tmp.sort(this.sortby); //排序
+				this.task.splice(0, this.task.length);
+				for(var i = 0; i < tmp.length; i++) {
+					var t = this.clone(tmp[i]);
+					this.task.push(t);
+				}
+				
+				this.$call('modal', 'toast', {'message': 'Add a new task successfully', 'duration': 2});
+
+				storage.setItem('task', JSON.stringify(self.task));
+				//记录
+				this.record(t, 'add');
+			}
+		},
+		//删除任务
+		delete: function(e) {
+			var storage = require('@weex-module/storage');
+			var modal = require('@weex-module/modal');
+			var self = this;
+
+			//计时器进行时不能对任务进行删除
+			if(this.timer_is_run) {
+				this.$call('modal', 'toast', {'message': 'Task editing is disabled because you are currently in a pomo', 'duration': 2});
+				return;
+			}
+
+			//删除任务需要核实
+			var msg = "Do you really want to delete this task?";
+			var ok_title = "DELETE";
+			var cancel_title = "CANCEL";
+			modal.confirm({
+				'message': msg,
+				'okTitle': ok_title,
+				'cancelTitle': cancel_title
+			}, function(result) {
+				if(result == ok_title) {
+					var index = e.target.attr.index;
+					var t = self.task[index];
+					self.task.splice(index, 1);
+
+					storage.setItem('task', JSON.stringify(self.task));
+					self.record(t, 'del');
+				}
+			});
+
+			
+		},
+	}	
+}
+</script>

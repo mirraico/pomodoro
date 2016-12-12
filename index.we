@@ -1,0 +1,464 @@
+<template>
+	<div class="index">
+		//计时状态时间条红色，休息状态时间条绿色
+		<wxc-navpage class="timer" if="{{!rest_is_run}}" data-role="none" height="100" background-color="#e74c3c" title="{{timer_show}}" title-color="white"  left-item-src="http://p1.bqimg.com/567571/63769c8583205e32.png" right-item-src="{{timer_icon_src}}"></wxc-navpage>
+		<wxc-navpage class="timer" if="{{rest_is_run}}" data-role="none" height="100" background-color="#458b00" title="{{rest_show}}" title-color="white"  left-item-src="http://p1.bqimg.com/567571/63769c8583205e32.png" right-item-src="{{timer_icon_src}}"></wxc-navpage>
+		//weex不支持display，用z-index控制显示页面
+		<task class="page" id="task-id" if="page===0" style="z-index:{{page===0?5:0}}"></task>
+		<pomodoro class="page" id="pomodoro-id" if="page===1" style="z-index:{{page===1?5:0}}"></pomodoro>
+		<record class="page" if="page===2" style="z-index:{{page===2?5:0}}"></record>
+		//标签栏
+		<tabbar id="tabbar" bgopacity="1" tabs="{{tabItems}}" selected="{{page}}" class="tabbar"></tabbar>
+	</div>
+</template>
+
+<style>
+.timer{
+	z-index: 10;
+	height: 100;
+}
+.index{
+	position: absolute;
+	left: 0;
+	right: 0;
+	top: 0;
+	bottom: 0;
+}
+.tabbar{
+	z-index: 10;
+	width:750;
+	border-top-style: solid;
+	border-top-width: 2;
+	border-color: #bbb;
+}
+.page{
+	background-color: #eee;
+	z-index:0;
+}
+</style>
+
+<script>
+require('./pomodoro.we');
+require('./task.we');
+require('./record.we');
+
+var timer;
+
+module.exports = {
+	data:{
+		timer_minute: 25,
+		timer_show: '',
+		timer_is_run: false, //番茄钟正在运行
+		timer_icon_src: 'http://p1.bqimg.com/567571/828eec3b5562dc2b.png',
+		rest_minute: 5,
+		rest_show: '',
+		rest_is_run: false, //休息正在运行
+		start_time : '',
+		end_time : '',
+
+		task:[], //任务列表
+	    pomo_record: [], //番茄钟记录
+	    task_record: [], //任务记录
+
+	    today_date: 0, //今天的日期，当该值发生变化时说明新的一天
+        day_num: 0, //总天数，新的一天时自加1
+        tot_cnt: 0, //番茄钟总数，包括今天
+        today_cnt: 0, //今天番茄钟总数
+        week_cnt: [0, 0, 0, 0, 0, 0, 0], //最近一周的番茄钟个数
+
+		page: 1,
+		tabItems: [
+			{
+				title: "Task",
+				defaultTitleColor: "#868686",
+				activeTitleColor:"#e35a3f",
+				image: 'http://i1.piimg.com/567571/624f02c6898e7b7d.png',
+				selectedImage: 'http://i1.piimg.com/567571/cf6763c59723cece.png',
+			},
+			{
+				title: "Pomodoro",
+				defaultTitleColor: "#868686",
+				activeTitleColor:"#e35a3f",
+				image: 'http://i1.piimg.com/567571/e7ff1e9f133a4fc5.png',
+				selectedImage: 'http://i1.piimg.com/567571/4ebca3754f7ce737.png',
+			},
+			{
+				title: "Record",
+				defaultTitleColor: "#868686",
+				activeTitleColor:"#e35a3f",
+				image: 'http://i1.piimg.com/567571/3f67c0fd7bef195c.png',
+				selectedImage: 'http://i1.piimg.com/567571/93bffaab18d5a976.png',
+			},
+		],
+	},
+
+	init: function () {
+		var storage = require('@weex-module/storage');
+    	storage.setItem('timer_stat', 'FALSE'); //程序打开的时候计时状态不能继承上次的，必须写在init里
+    	storage.setItem('rest_stat', 'FALSE'); //程序打开的时候休息状态不能继承上次的，必须写在init里
+
+    	//this.$call('modal', 'toast', {'message': 'TEST0', 'duration': 2});
+    },
+	ready: function() {
+		var storage = require('@weex-module/storage');
+    	var self = this;
+
+    	storage.getItem('first_flag',function(e) {
+    		
+    		//程序非第一次启动
+	        if(e.data == 'NOTFIRST') {
+	        	//self.$call('modal', 'toast', {'message': 'NOT FIRST', 'duration': 2});
+	        	//读取番茄时长设置
+	        	storage.getItem('timer',function(e) {
+			        self.timer_minute = parseInt(e.data);
+			        if(self.timer_minute < 10) self.timer_show = "0" + self.timer_minute + ":00" //补0
+		    		else self.timer_show = self.timer_minute + ":00"
+		    	});
+	        	//读取休息时长设置
+	        	storage.getItem('rest',function(e) {
+			        self.rest_minute = parseInt(e.data);
+			        if(self.rest_minute < 10) self.rest_show = "0" + self.rest_minute + ":00" //补0
+		    		else self.rest_show = self.rest_minute + ":00"
+		    	});
+		    	//时间与统计处理
+		    	storage.getItem('today_date',function(e) {
+			        var nowtime = new Date();
+					self.today_date = nowtime.getDate();
+
+			        var date_rec = parseInt(e.data); //记录的date
+			        if(self.today_date != date_rec) {//不相等意味着新的一天
+			        	storage.getItem('day_num',function(e) {
+			        		self.day_num = parseInt(e.data) + 1; //天数加1
+			        		storage.setItem('day_num', self.day_num);
+			        	});
+			        	storage.getItem('week_cnt',function(e) {
+                			self.week_cnt = JSON.parse(e.data);
+                			self.week_cnt[nowtime.getDay()] = 0; //将上周这一天的数据清空
+							storage.setItem('week_cnt', JSON.stringify(self.week_cnt));
+                		});
+						storage.setItem('today_cnt', self.today_cnt);
+						storage.setItem('today_date', self.today_date);
+			        } else {//同一天
+			        	storage.getItem('day_num',function(e) {
+			        		self.day_num = parseInt(e.data);
+			        	});
+			        	storage.getItem('today_cnt',function(e) {
+			        		self.today_cnt = parseInt(e.data);
+			        	});
+				        storage.getItem('week_cnt',function(e) {
+				        	self.week_cnt = JSON.parse(e.data);
+				        });
+			        }
+
+			        storage.getItem('tot_cnt',function(e) {
+			        	self.tot_cnt = parseInt(e.data);
+			        });
+
+		    	});
+	        } 
+	        //程序第一次启动的初始化
+	        else {
+	        	//self.$call('modal', 'toast', {'message': 'FIRST', 'duration': 2});
+	        	//载入默认配置，其中task的默认配置在pomodoro.we中载入
+	        	self.timer_minute = 25;
+				self.timer_show = '25:00';
+	        	self.rest_minute = 5;
+				self.rest_show = '05:00';
+
+				//向本地写入默认配置
+	        	storage.setItem('timer', self.timer_minute);
+	        	storage.setItem('rest', self.rest_minute);
+				storage.setItem('pomo_record', JSON.stringify(self.pomo_record));
+				storage.setItem('task_record', JSON.stringify(self.task_record));
+
+				//时间与统计处理
+				var nowtime = new Date();
+				self.today_date = nowtime.getDate();
+				self.day_num = 1;
+				self.tot_cnt = 0;
+				self.today_cnt = 0;
+				self.week_cnt = [0, 0, 0, 0, 0, 0, 0];
+				storage.setItem('today_date', self.today_date);
+				storage.setItem('day_num', self.day_num);
+				storage.setItem('tot_cnt', self.tot_cnt);
+				storage.setItem('today_cnt', self.today_cnt);
+				storage.setItem('week_cnt', JSON.stringify(self.week_cnt));
+	        }
+	        //启动时通知子控件拿数据
+	    	//self.$broadcast('init_data', {});
+    		//self.$call('modal', 'toast', {'message': 'BROADCAST', 'duration': 2});
+	    });
+
+	},
+	created() {
+		//监听开始和设置按钮
+		this.$on('naviBar.leftItem.click',function(e){
+			this.setting_timer();
+		});
+		this.$on('naviBar.rightItem.click',function(e){
+			if(!this.timer_is_run) {
+				this.start();
+			} else {
+				this.confirm_stop();
+			}
+		});
+
+		//监听切换页面事件
+		this.$on("switchPage",(e)=>{
+			this.page = e.detail.page;
+		});
+
+	},
+	methods: {
+		//开始番茄钟
+		start: function() {
+			var storage = require('@weex-module/storage');
+	    	var self = this;
+
+			this.startTime = new Date();
+			this.endTime = this.startTime.getTime() + this.timer_minute*60*1000; //设置结束时时间
+			timer = setInterval(this.freshtime.bind(this), 500);
+			this.timer_icon_src = 'http://i1.piimg.com/567571/0ad69f99be49cc41.png';
+			this.timer_is_run = true; //打开计时器运行标记，包括番茄钟的运行和休息的运行
+			self.$broadcast('timer_stat', {stat: 'TRUE'}); //广播将运行标记通知给正在运行的子控件
+			storage.setItem('timer_stat', 'TRUE'); //写入运行标记改变以通知不是正在运行的子控件，当子控件启动时就会读取到该标记
+		},
+		//核实停止计时器，包括番茄钟和休息
+		confirm_stop: function() {
+			var modal = require('@weex-module/modal');
+			var self = this;
+
+			//当休息状态时点击计时器停止无需确认，人性化
+			if(this.rest_is_run) {
+				this.stop();
+				return;
+			}
+
+			//弹出confirm核实是否放弃番茄钟
+			var msg = "Pomodoro cannot be suspended, do you really want to abandon?";
+			var ok_title = "ABANDON POMO";
+			var cancel_title = "CANCEL";
+			modal.confirm({
+				'message': msg,
+				'okTitle': ok_title,
+				'cancelTitle': cancel_title
+			}, function(result) {
+				if(result == ok_title)
+					self.stop();
+			});
+		},
+		//停止计时器，包括番茄钟和休息
+		stop: function() {
+			var storage = require('@weex-module/storage');
+	    	var self = this;
+
+			this.startTime = '';
+			clearInterval(timer); //清空计时器
+
+			//参数还原
+	        if(self.timer_minute < 10) self.timer_show = "0" + self.timer_minute + ":00"
+    		else self.timer_show = self.timer_minute + ":00"
+	        if(self.rest_minute < 10) self.rest_show = "0" + self.rest_minute + ":00"
+    		else self.rest_show = self.rest_minute + ":00"
+			this.timer_icon_src = 'http://p1.bqimg.com/567571/828eec3b5562dc2b.png';
+
+			//广播将运行标记通知给正在运行的子控件
+			//写入运行标记改变以通知不是正在运行的子控件，当子控件启动时就会读取到该标记
+			this.timer_is_run = false;
+			self.$broadcast('timer_stat', {stat: 'FALSE'});
+			storage.setItem('timer_stat', 'FALSE');
+
+			//同样将休息标记通知给子控件
+			this.rest_is_run = false;
+			self.$broadcast('rest_stat', {stat: 'FALSE'});
+			storage.setItem('rest_stat', 'FALSE');
+		},
+		//开始休息
+		rest: function() {
+			var storage = require('@weex-module/storage');
+	    	var self = this;
+
+	    	//番茄钟完了自动进入休息状态
+			this.startTime = new Date();
+			this.endTime = this.startTime.getTime() + this.rest_minute*60*1000;
+			clearInterval(timer);
+			timer = setInterval(this.freshtime.bind(this), 500);
+			//不关闭运行标记，打开休息标记，这两个标记在stop()中统一关闭
+			//子控件通知
+			this.rest_is_run = true;
+			self.$broadcast('rest_stat', {stat: 'TRUE'});
+			storage.setItem('rest_stat', 'TRUE');
+		},
+		//计时器，在番茄钟到期时会进入休息，在休息到期时会停止计时器
+		freshtime: function () {
+			var nowtime = new Date(); //当前时间
+			var lefttime = parseInt((this.endTime - nowtime.getTime()) / 1000); //和结束时间一起计算剩余时间
+			var minute = parseInt((lefttime/60)%60);
+			var second = parseInt(lefttime%60);
+			var min_show = '' + minute;
+			var sec_show = '' + second;
+			if(minute < 10) min_show = '0' + min_show; //补0
+			if(second < 10) sec_show = '0' + sec_show;
+			//显示剩余时间
+			if(this.rest_is_run) this.rest_show = min_show + ':' + sec_show;
+			else this.timer_show = min_show + ':' + sec_show;
+			
+			//计时器到期
+			if(lefttime < 0) {
+				var storage = require('@weex-module/storage');
+	    		var self = this;
+
+	    		//是休息时间到了
+				if(this.rest_is_run) {
+
+					var title_first = '';
+					var title_cnt = 0;
+					//读取番茄钟记录
+					storage.getItem('pomo_record',function(e) {
+				        self.pomo_record = JSON.parse(e.data);
+				        //查找这个番茄钟中所选择的任务
+				        for(var i = 0; i < self.task.length; i++) { 
+				        	if(self.task[i].is_selected) {
+				        		if(title_first == '') title_first = self.task[i].name; //记录下第一个任务名字，给记录定一个友好的标题
+				        		title_cnt = title_cnt + 1;
+				        	}
+				        }
+				        var title_t = '';
+				        //番茄钟记录标题类似于 "task name" and other 3 tasks 这样
+				        if(title_cnt == 0) title_t = 'No selected task';
+				        else if(title_cnt == 1) title_t = title_first;
+				        else title_t = '"' + title_first + '" and other ' + (title_cnt-1) + ' task';
+
+				        var e = new Date();
+				        var s = new Date();
+				        s.setTime(e.getTime() - self.rest_minute*60*1000);
+				        var rec = {title: title_t, stat: 'rest', start: s.getHours() + ':' + s.getMinutes(),
+				        	end: e.getHours() + ':' + e.getMinutes(), 
+				        	date: e.getFullYear() + '/' + (e.getMonth()+1) + '/' + e.getDate()
+				        	};
+				        //self.$call('modal', 'toast', {'message': rec, 'duration': 5});
+				        //添加一条新的番茄钟记录
+				        self.pomo_record.push(rec);
+				        //self.$call('modal', 'toast', {'message': pomo_record.length, 'duration': 2});
+				        //仅做写入，不想做广播通知了，如果计时完成时正在看番茄钟记录的子控件，该子控件不会立刻刷新，必须再次载入该子控件时才会
+				        storage.setItem('pomo_record', JSON.stringify(self.pomo_record));
+			    	});
+
+					this.stop();
+				}
+				//是番茄时间到了
+				else {
+					storage.getItem('task',function(e) {
+				        self.task = JSON.parse(e.data);
+				        //计数
+				        //查找这个番茄钟中所选择的任务并为这些任务的番茄钟计数加1，在这里进行是因为即使随后的休息计时被放弃了也是要加计数的
+				        for(var i = 0; i < self.task.length; i++) { 
+				        	if(self.task[i].is_selected) {
+				        		self.task[i].pomo_cnt = self.task[i].pomo_cnt + 1; //加1
+				        	}
+				        }
+				        storage.setItem('task', JSON.stringify(self.task));
+				        //self.$call('modal', 'toast', {'message': JSON.parse(self.task), 'duration': 5});
+
+				        //记录
+				        var title_first = '';
+						var title_cnt = 0;
+						storage.getItem('pomo_record',function(e) {
+					        self.pomo_record = JSON.parse(e.data);
+					        for(var i = 0; i < self.task.length; i++) { 
+					        	if(self.task[i].is_selected) {
+					        		if(title_first == '') title_first = self.task[i].name; //记录下第一个名字
+					        		title_cnt = title_cnt + 1;
+					        	}
+					        }
+					        var title_t = '';
+					        //番茄钟记录标题类似于 "task name" and other 3 tasks 这样
+					        if(title_cnt == 0) title_t = 'No selected task';
+					        else if(title_cnt == 1) title_t = title_first;
+					        else title_t = '"' + title_first + '" and other ' + (title_cnt-1) + ' task';
+
+					        var e = new Date();
+					        var s = new Date();
+					        s.setTime(e.getTime() - self.rest_minute*60*1000);
+					        var rec = {title: title_t, stat: 'pomodoro', start: s.getHours() + ':' + s.getMinutes(),
+					        	end: e.getHours() + ':' + e.getMinutes(), 
+					        	date: e.getFullYear() + '/' + (e.getMonth()+1) + '/' + e.getDate()
+					        	};
+					        //self.$call('modal', 'toast', {'message': rec, 'duration': 5});
+					        //添加一条新的番茄钟记录
+					        self.pomo_record.push(rec);
+					        //self.$call('modal', 'toast', {'message': pomo_record.length, 'duration': 2});
+					        //仅做写入，不想做广播通知了，如果计时完成时正在看番茄钟记录的子控件，该子控件不会立刻刷新，必须再次载入该子控件时才会
+					        storage.setItem('pomo_record', JSON.stringify(self.pomo_record));
+				    	});
+
+				    	//统计
+			        	storage.getItem('today_cnt',function(e) {
+			        		self.today_cnt = parseInt(e.data);
+			        		self.today_cnt = self.today_cnt + 1;
+			        		storage.setItem('today_cnt', self.today_cnt);
+			        	});
+			        	storage.getItem('tot_cnt',function(e) {
+			        		self.tot_cnt = parseInt(e.data);
+			        		self.tot_cnt = self.tot_cnt + 1;
+			        		storage.setItem('tot_cnt', self.tot_cnt);
+			        	});
+			        	storage.getItem('week_cnt',function(e) {
+			        		self.week_cnt = JSON.parse(e.data);
+			        		var nowtime = new Date();
+			        		self.week_cnt[nowtime.getDay()] = self.week_cnt[nowtime.getDay()] + 1;
+							storage.setItem('week_cnt', JSON.stringify(self.week_cnt));
+			        	});
+			    	});
+			    	this.rest(); //番茄钟到了立刻启动休息（不关闭运行标记）
+				}
+			}
+		},
+		//设置计时器
+		setting_timer: function () {
+			var modal = require('@weex-module/modal');
+			var storage = require('@weex-module/storage');
+			var self = this;
+			//计时器正在运行时不允许修改时间
+			if(this.timer_is_run) {
+				this.$call('modal', 'toast', {'message': 'Pomo timer setting is disabled because you are currently in a pomo', 'duration': 2});
+				return;
+			}
+			//弹窗对休息时间进行修改
+			modal.prompt( {
+				'message': 'Rest timer setting (1-10 mins)',
+				'okTitle': 'OK',
+				'cancelTitle': 'CANCEL'
+			}, function(result) {
+				if(result.result == 'OK') {
+					var minute = parseInt(result.data);
+					if(minute >= 1 && minute <= 10) {
+						self.rest_minute = minute;
+						if(self.rest_minute < 10) self.rest_show = "0" + self.rest_minute + ":00"; //补0
+		    			else self.rest_show = self.rest_minute + ":00";
+	        			storage.setItem('rest', self.rest_minute);
+						self.$call('modal', 'toast', {'message': 'Set rest timer successfully', 'duration': 2});
+					}
+				}
+			});
+			//弹窗对番茄钟时间进行修改
+			modal.prompt( {
+				'message': 'Pomo timer setting (10-60 mins)',
+				'okTitle': 'OK',
+				'cancelTitle': 'CANCEL'
+			}, function(result) {
+				if(result.result == 'OK') {
+					var minute = parseInt(result.data);
+					if(minute >= 10 && minute <= 60) {
+						self.timer_minute = minute;
+						if(self.timer_minute < 10) self.timer_show = "0" + self.timer_minute + ":00"; //补0
+		    			else self.timer_show = self.timer_minute + ":00";
+	        			storage.setItem('timer', self.timer_minute);
+						self.$call('modal', 'toast', {'message': 'Set pomo timer successfully', 'duration': 2});
+					}
+				}
+			});
+		}
+	}
+}
+</script>

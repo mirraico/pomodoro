@@ -1,0 +1,158 @@
+<template>
+	<scroller class="wrapper">
+		//计时器未运行显示，黄色
+		<wxc-tip type="warning" if="{{!timer_is_run}}">
+			Select some tasks to be performed and click the Start button
+		</wxc-tip>
+		//计时器运行且在番茄钟时，红色
+		<wxc-tip type="danger" if="{{timer_is_run && !rest_is_run}}">
+			The following tasks are being performed
+		</wxc-tip>
+		//计时器运行且在休息时，绿色
+		<wxc-tip type="success" if="{{timer_is_run && rest_is_run}}">
+			 A pomodoro is finished and you can have a rest
+		</wxc-tip>
+		<list class="task-list">
+			<cell repeat="{{task}}" if="{{!timer_is_run}}">
+				//计时器未运行时，仅显示未完成的任务，供用户选择这次番茄钟所要进行的任务
+				<div class="task-item" onclick="select" index="{{$index}}" if="{{!is_finished}}" style="flex-direction: row;">
+					<image class="task-item-selected" src="http://p1.bpimg.com/567571/2daccb57f5eaf3af.png" if="{{!is_selected}}">
+					</image>
+					<image class="task-item-selected" src="http://p1.bpimg.com/567571/9e56ca09575f1768.png" if="{{is_selected}}">
+					</image>
+					<text class="task-item-name">{{name}}</text>
+				</div>
+			</cell>
+			<cell repeat="{{task}}" if="{{timer_is_run}}">
+				//计时器运行时，仅显示用户这次番茄钟选择的任务
+				<div class="task-item" onclick="select" index="{{$index}}" if="{{!is_finished && is_selected}}" style="flex-direction: row;">
+					<image class="task-item-selected" src="http://p1.bpimg.com/567571/9e56ca09575f1768.png">
+					</image>
+					<text class="task-item-name">{{name}}</text>
+				</div>
+			</cell>
+		</list>
+	</scroller>
+</template>
+
+<style>
+.wrapper { 
+	width: 750; 
+	position: absolute; 
+	top: 100; 
+	left: 0; 
+	right: 0; 
+	bottom: 100;
+}
+.task-list {
+	margin-bottom: 0;
+}
+.task-item {
+	flex-direction: row;
+	background-color: #fff;
+	margin-top: -2;
+	padding-top: 32;
+	padding-left: 60;
+	border-top-style: solid;
+	border-bottom-style: solid;
+	border-top-width: 2;
+	border-bottom-width: 2;
+	border-color: #ddd;
+	height: 120;
+}
+.task-item-selected {
+	width: 56; 
+	height: 56; 
+}
+.task-item-name {
+	font-size: 38;
+	margin-left: 20;
+	color: #777;
+}
+</style>
+
+<script>
+require('weex-components');
+module.exports = {
+	data: {
+		timer_is_run: false,
+		rest_is_run: false,
+		task:[
+		],
+	},
+	init: function () {
+    	//this.$call('modal', 'toast', {'message': 'TEST1', 'duration': 2});
+    },
+	created: function() {
+		var storage = require('@weex-module/storage');
+		var self = this;
+
+    	storage.getItem('first_flag',function(e) {
+	        if(e.data == 'NOTFIRST') {
+	        	//任务在ready中读取
+	        	//self.$call('modal', 'toast', {'message': 'TEST3', 'duration': 2});
+	        } 
+	        //首次启动初始化任务列表，以给予用户软件使用提示
+	        else {
+	        	//self.$call('modal', 'toast', {'message': 'FIRST', 'duration': 2});
+	        	self.task.push({name: '选择任务以开始番茄钟', is_selected: false, is_run: false, is_finished: false, pomo_cnt: 0});
+	        	self.task.push({name: 'Task中添加新的任务', is_selected: false, is_run: false, is_finished: false, pomo_cnt: 0});
+	        	self.task.push({name: 'Task中单击任务将其标记为完成', is_selected: false, is_run: false, is_finished: false, pomo_cnt: 0});
+	        	self.task.push({name: 'Task中长按任务以删除任务', is_selected: false, is_run: false, is_finished: false, pomo_cnt: 0});
+	        	self.task.push({name: 'Record中查看番茄钟完成的记录', is_selected: false, is_run: false, is_finished: false, pomo_cnt: 0});
+
+	        	storage.setItem('task', self.task);
+    			storage.setItem('first_flag', 'NOTFIRST'); //设置标记，以后启动都不是首次启动了
+	        }
+	    });
+
+	    //监听主控件广播的有关运行标记的状态改变
+		this.$on('timer_stat', function(e) {
+			//self.$call('modal', 'toast', {'message': e.detail.stat, 'duration': 2});
+			if(e.detail.stat == 'TRUE') self.timer_is_run = true;
+			else self.timer_is_run = false;
+		});
+		//监听主控件广播的有关休息标记的状态改变
+		this.$on('rest_stat', function(e) {
+			//self.$call('modal', 'toast', {'message': e.detail.stat, 'duration': 2});
+			if(e.detail.stat == 'TRUE') self.rest_is_run = true;
+			else self.rest_is_run = false;
+		});
+	},
+	ready: function() {
+		var storage = require('@weex-module/storage');
+		var self = this;
+	    //self.$call('modal', 'toast', {'message': 'TEST2', 'duration': 2});
+
+	    //读取任务
+		storage.getItem('task',function(e){
+			//self.$call('modal', 'toast', {'message': JSON.parse(e.data), 'duration': 2});
+			self.task = JSON.parse(e.data);
+		});
+		//读取运行标记，每次子控件被载入的时候都会读取
+		storage.getItem('timer_stat',function(e){
+			if(e.data == 'TRUE') self.timer_is_run = true;
+			else self.timer_is_run = false;
+		});
+		//读取休息标记，每次子控件被载入的时候都会读取
+		storage.getItem('rest_stat',function(e){
+			if(e.data == 'TRUE') self.rest_is_run = true;
+			else self.rest_is_run = false;
+		});
+		//self.$call('modal', 'toast', {'message': this.rest_is_run, 'duration': 2});
+	},
+	methods: {
+		//为本次番茄钟要进行的任务进行选择
+		select: function(e) {
+			var storage = require('@weex-module/storage');
+			var self = this;
+			//self.$call('modal', 'toast', {'message': this.timer_is_run, 'duration': 2});
+			if(this.timer_is_run) return;
+
+			var index = e.target.attr.index;
+			this.task[index].is_selected = !this.task[index].is_selected;
+			storage.setItem('task', JSON.stringify(self.task));
+		},
+	}	
+}
+</script>
