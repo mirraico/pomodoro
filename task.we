@@ -162,6 +162,11 @@ module.exports = {
 			var index = e.target.attr.index;
 			this.task[index].is_finished = !this.task[index].is_finished; //标记或撤销
 			this.task[index].is_selected = false; 
+
+			var t = this.task[index];
+			//添加记录
+			if(t.is_finished) this.record(t, 'finished');
+			else this.record(t, 'recall');
 			
 			var tmp = this.task.slice(); 
 			tmp.sort(this.sortby); //排序
@@ -171,11 +176,6 @@ module.exports = {
 				this.task.push(t);
 			}
 			storage.setItem('task', JSON.stringify(self.task));
-
-			var t = this.task[index];
-			//添加记录
-			if(t.is_finished) this.record(t, 'finished');
-			else this.record(t, 'recall');
 		},
 		//监听输入框改变，当有内容时显示添加按钮
 		change: function(e) {
